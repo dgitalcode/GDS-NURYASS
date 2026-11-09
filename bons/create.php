@@ -16,7 +16,14 @@ $clientId = intval($_GET['client_id'] ?? 0);
 
 try {
     $pdo = getDBConnection();
-    $clients = $pdo->query("SELECT id, nom, prenom, nom_entreprise, type_client FROM clients WHERE actif = 1 ORDER BY nom")->fetchAll();
+    $clients = $pdo->query("
+        SELECT c.id, c.nom, c.prenom, c.nom_entreprise, c.type_client, c.credit_max,
+               COALESCE(cr.montant_actuel, 0) as credit_actuel
+        FROM clients c
+        LEFT JOIN credits cr ON c.id = cr.client_id
+        WHERE c.actif = 1 
+        ORDER BY c.nom
+    ")->fetchAll();
     $produits = $pdo->query("SELECT p.*, tp.nom_type, c.nom_couleur FROM produits p LEFT JOIN types_produits tp ON p.type_id = tp.id LEFT JOIN couleurs c ON p.couleur_id = c.id WHERE p.actif = 1 ORDER BY p.nom_produit")->fetchAll();
 } catch (PDOException $e) {
     error_log("Erreur chargement données: " . $e->getMessage());
@@ -151,6 +158,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if (!$hasValidProduct) {
         $errors[] = 'Au moins un produit avec quantité et prix valides est requis.';
+    }
+    
+    // Vérifier le stock disponible pour les bons de sortie
+    if (empty($errors) && $typeBon === 'sortie') {
+        foreach ($produitsData as $prod) {
+            $produitId = intval($prod['produit_id'] ?? 0);
+            $quantiteDemandee = intval($prod['quantite'] ?? 0);
+            
+            if ($produitId > 0 && $quantiteDemandee > 0) {
+                $stmt = $pdo->prepare("SELECT nom_produit, stock FROM produits WHERE id = :id");
+                $stmt->execute(['id' => $produitId]);
+                $produitInfo = $stmt->fetch();
+                
+                if ($produitInfo && $quantiteDemandee > $produitInfo['stock']) {
+                    $errors[] = "STOCK INSUFFISANT! Le produit \"" . $produitInfo['nom_produit'] . "\" n'a que " . $produitInfo['stock'] . " unités en stock, mais vous demandez " . $quantiteDemandee . " unités.";
+                }
+            }
+        }
+    }
+    
+    // Vérifier le crédit maximum si le paiement est non payé et type sortie
+    if (empty($errors) && $statutPaiement === 'non_paye' && $typeBon === 'sortie' && $clientId > 0) {
+        // Calculer le total du bon
+        $totalBon = 0;
+        foreach ($produitsData as $prod) {
+            $quantite = intval($prod['quantite'] ?? 0);
+            $prix = floatval($prod['prix'] ?? 0);
+            $totalBon += $quantite * $prix;
+        }
+        
+        // Récupérer les infos de crédit du client
+        $stmt = $pdo->prepare("
+            SELECT c.credit_max, COALESCE(cr.montant_actuel, 0) as credit_actuel
+            FROM clients c
+            LEFT JOIN credits cr ON c.id = cr.client_id
+            WHERE c.id = :client_id
+        ");
+        $stmt->execute(['client_id' => $clientId]);
+        $creditInfo = $stmt->fetch();
+        
+        if ($creditInfo) {
+            $creditMax = floatval($creditInfo['credit_max']);
+            $creditActuel = floatval($creditInfo['credit_actuel']);
+            $nouveauCredit = $creditActuel + $totalBon;
+            
+            if ($nouveauCredit > $creditMax) {
+                $errors[] = "CRÉDIT MAXIMUM DÉPASSÉ! Ce client a atteint sa limite de crédit. Crédit actuel: " . number_format($creditActuel, 2) . " DH, Maximum autorisé: " . number_format($creditMax, 2) . " DH, Total du bon: " . number_format($totalBon, 2) . " DH.";
+            }
+        }
     }
     
     if (empty($errors)) {
@@ -355,10 +411,13 @@ require_once '../includes/header.php';
                         <div class="row mb-3">
                             <div class="col-md-12">
                                 <label for="client_id" class="form-label">Client <span class="text-danger">*</span></label>
-                                <select class="form-select" id="client_id" name="client_id">
+                                <select class="form-select" id="client_id" name="client_id" required>
                                     <option value="">Sélectionner un client</option>
                                     <?php foreach ($clients as $client): ?>
-                                        <option value="<?php echo $client['id']; ?>" <?php echo $clientId == $client['id'] ? 'selected' : ''; ?>>
+                                        <option value="<?php echo $client['id']; ?>" 
+                                                data-credit-max="<?php echo $client['credit_max']; ?>"
+                                                data-credit-actuel="<?php echo $client['credit_actuel']; ?>"
+                                                <?php echo $clientId == $client['id'] ? 'selected' : ''; ?>>
                                             <?php echo htmlspecialchars($client['type_client'] === 'entreprise' ? ($client['nom_entreprise'] ?? $client['nom']) : ($client['nom'] . ' ' . ($client['prenom'] ?? ''))); ?>
                                         </option>
                                     <?php endforeach; ?>
@@ -540,6 +599,15 @@ require_once '../includes/header.php';
     </div>
 </div>
 
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+
+<!-- jQuery (requis pour Select2) -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
 let produitIndex = 1;
 
@@ -640,16 +708,29 @@ function toggleClientSelection() {
         clientExistantSection.style.display = 'block';
         clientNouveauSection.style.display = 'none';
         clientSelect.setAttribute('required', 'required');
+        clientSelect.classList.remove('is-invalid');
         console.log('✓ Mode: Client Existant - required ajouté');
         // Désactiver les champs requis du nouveau client
-        document.querySelectorAll('#client-nouveau-section input[required], #client-nouveau-section textarea[required]').forEach(el => {
+        document.querySelectorAll('#client-nouveau-section input[required], #client-nouveau-section textarea[required], #client-nouveau-section select[required]').forEach(el => {
             el.removeAttribute('required');
         });
+        // Réinitialiser Select2 pour le client existant
+        setTimeout(function() {
+            initSelect2Client();
+        }, 100);
     } else {
         clientExistantSection.style.display = 'none';
         clientNouveauSection.style.display = 'block';
         clientSelect.removeAttribute('required');
+        clientSelect.classList.remove('is-invalid');
         console.log('✓ Mode: Nouveau Client - required retiré');
+        // Détruire Select2 si on passe en mode nouveau client
+        if (typeof jQuery !== 'undefined') {
+            const $clientSelect = jQuery('#client_id');
+            if ($clientSelect.hasClass('select2-hidden-accessible')) {
+                $clientSelect.select2('destroy');
+            }
+        }
         // Activer les champs requis du nouveau client
         const typePersonne = document.getElementById('type_personne');
         if (typePersonne && typePersonne.checked) {
@@ -675,13 +756,29 @@ function toggleNewClientType() {
     if (typePersonne) {
         personneFields.style.display = 'block';
         entrepriseFields.style.display = 'none';
-        if (nomEntreprise) nomEntreprise.removeAttribute('required');
-        if (nom) nom.setAttribute('required', 'required');
+        // Retirer required des champs entreprise
+        if (nomEntreprise) {
+            nomEntreprise.removeAttribute('required');
+            nomEntreprise.value = ''; // Optionnel: vider le champ
+        }
+        // Ajouter required au champ nom seulement si la section nouveau client est visible
+        const nouveauClientSection = document.getElementById('client-nouveau-section');
+        if (nom && nouveauClientSection && nouveauClientSection.style.display !== 'none') {
+            nom.setAttribute('required', 'required');
+        }
     } else {
         personneFields.style.display = 'none';
         entrepriseFields.style.display = 'block';
-        if (nomEntreprise) nomEntreprise.setAttribute('required', 'required');
-        if (nom) nom.removeAttribute('required');
+        // Retirer required des champs personne
+        if (nom) {
+            nom.removeAttribute('required');
+            nom.value = ''; // Optionnel: vider le champ
+        }
+        // Ajouter required au champ nom_entreprise seulement si la section nouveau client est visible
+        const nouveauClientSection = document.getElementById('client-nouveau-section');
+        if (nomEntreprise && nouveauClientSection && nouveauClientSection.style.display !== 'none') {
+            nomEntreprise.setAttribute('required', 'required');
+        }
     }
 }
 
@@ -698,12 +795,45 @@ document.addEventListener('DOMContentLoaded', function() {
     bonForm.addEventListener('submit', function(e) {
         console.log('=== SOUMISSION DU FORMULAIRE ===');
         
+        // Enlever les classes d'erreur précédentes
+        document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        
+        // Retirer l'attribut required de tous les champs cachés pour éviter l'erreur HTML5
+        document.querySelectorAll('#client-nouveau-section input[required], #client-nouveau-section textarea[required]').forEach(el => {
+            const parent = el.closest('#client-nouveau-section');
+            if (parent && parent.style.display === 'none') {
+                el.removeAttribute('required');
+            }
+        });
+        
+        // Retirer l'attribut required des champs dans les sections masquées (personne_fields ou entreprise_fields)
+        const personneFields = document.getElementById('personne_fields');
+        const entrepriseFields = document.getElementById('entreprise_fields');
+        
+        if (personneFields && personneFields.style.display === 'none') {
+            personneFields.querySelectorAll('input[required], textarea[required]').forEach(el => {
+                el.removeAttribute('required');
+            });
+        }
+        
+        if (entrepriseFields && entrepriseFields.style.display === 'none') {
+            entrepriseFields.querySelectorAll('input[required], textarea[required]').forEach(el => {
+                el.removeAttribute('required');
+            });
+        }
+        
         try {
             const clientTypeRadio = document.querySelector('input[name="client_type"]:checked');
             if (!clientTypeRadio) {
                 console.error('Aucun type de client sélectionné');
                 e.preventDefault();
-                alert('Veuillez sélectionner le type de client (Existant ou Nouveau).');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Type de client requis',
+                    text: 'Veuillez sélectionner le type de client (Existant ou Nouveau).',
+                    confirmButtonColor: '#667eea',
+                    confirmButtonText: 'OK'
+                });
                 return false;
             }
             
@@ -715,8 +845,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!typeBon || !typeBon.value) {
                 console.error('Type de bon non sélectionné');
                 e.preventDefault();
-                alert('Veuillez sélectionner le type de bon.');
-                if (typeBon) typeBon.focus();
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Type de bon requis',
+                    text: 'Veuillez sélectionner le type de bon.',
+                    confirmButtonColor: '#667eea',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    if (typeBon) typeBon.focus();
+                });
                 return false;
             }
             console.log('Type de bon:', typeBon.value);
@@ -747,19 +884,123 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!hasValidProduct) {
                 console.error('Aucun produit valide trouvé');
                 e.preventDefault();
-                alert('Veuillez ajouter au moins un produit avec quantité et prix valides.');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Produit requis',
+                    text: 'Veuillez ajouter au moins un produit avec quantité et prix valides.',
+                    confirmButtonColor: '#667eea',
+                    confirmButtonText: 'OK'
+                });
                 return false;
             }
             console.log('✓ Produits valides:', hasValidProduct);
+            
+            // Vérifier le stock disponible pour les bons de sortie
+            const typeBonCheck = document.getElementById('type_bon').value;
+            if (typeBonCheck === 'sortie') {
+                let stockInsuffisant = false;
+                let messageStock = '';
+                
+                document.querySelectorAll('.produit-row').forEach(row => {
+                    const select = row.querySelector('.produit-select');
+                    const quantiteInput = row.querySelector('.quantite-input');
+                    
+                    if (select && select.value && quantiteInput) {
+                        const selectedOption = select.options[select.selectedIndex];
+                        const stockDisponible = parseInt(selectedOption.dataset.stock) || 0;
+                        const quantiteDemandee = parseInt(quantiteInput.value) || 0;
+                        const nomProduit = selectedOption.text.split(' - ')[0];
+                        
+                        if (quantiteDemandee > stockDisponible) {
+                            stockInsuffisant = true;
+                            messageStock += `<p><strong>${nomProduit}</strong>: Stock disponible: <span class="text-success">${stockDisponible}</span>, Demandé: <span class="text-danger">${quantiteDemandee}</span></p>`;
+                        }
+                    }
+                });
+                
+                if (stockInsuffisant) {
+                    console.error('Stock insuffisant!');
+                    e.preventDefault();
+                    Swal.fire({
+                        icon: 'error',
+                        title: '⚠️ Stock Insuffisant!',
+                        html: `<div style="text-align: left;">
+                            <p><strong>La quantité demandée dépasse le stock disponible:</strong></p>
+                            <hr>
+                            ${messageStock}
+                            <hr>
+                            <p class="mt-3">Veuillez réduire la quantité ou choisir un autre produit.</p>
+                        </div>`,
+                        confirmButtonColor: '#dc3545',
+                        confirmButtonText: 'Compris'
+                    });
+                    return false;
+                }
+            }
+            
+            // Vérifier le crédit maximum si client existant + non payé + sortie
+            if (clientType === 'existant') {
+                const clientSelect = document.getElementById('client_id');
+                const typeBonValue = document.getElementById('type_bon').value;
+                const statutPaiement = document.getElementById('statut_paiement').value;
+                
+                if (clientSelect && clientSelect.value && typeBonValue === 'sortie' && statutPaiement === 'non_paye') {
+                    const selectedOption = clientSelect.options[clientSelect.selectedIndex];
+                    const creditMax = parseFloat(selectedOption.dataset.creditMax) || 0;
+                    const creditActuel = parseFloat(selectedOption.dataset.creditActuel) || 0;
+                    
+                    // Calculer le total du bon
+                    let totalBon = 0;
+                    document.querySelectorAll('.produit-row').forEach(row => {
+                        const sousTotal = parseFloat(row.querySelector('.sous-total-input')?.value) || 0;
+                        totalBon += sousTotal;
+                    });
+                    
+                    const nouveauCredit = creditActuel + totalBon;
+                    
+                    if (nouveauCredit > creditMax) {
+                        console.error('Crédit maximum dépassé!');
+                        e.preventDefault();
+                        Swal.fire({
+                            icon: 'error',
+                            title: '⚠️ Crédit Maximum Dépassé!',
+                            html: `<div style="text-align: left;">
+                                <p><strong>Ce client a atteint sa limite de crédit.</strong></p>
+                                <hr>
+                                <p><i class="bi bi-cash-stack"></i> Crédit actuel: <strong>${creditActuel.toFixed(2)} DH</strong></p>
+                                <p><i class="bi bi-arrow-up-circle"></i> Maximum autorisé: <strong>${creditMax.toFixed(2)} DH</strong></p>
+                                <p><i class="bi bi-cart"></i> Total du bon: <strong>${totalBon.toFixed(2)} DH</strong></p>
+                                <hr>
+                                <p class="text-danger"><strong>Nouveau crédit serait: ${nouveauCredit.toFixed(2)} DH</strong></p>
+                                <p class="mt-3">Options:</p>
+                                <ul>
+                                    <li>Changer le statut de paiement à "Payé"</li>
+                                    <li>Réduire le montant du bon</li>
+                                    <li>Augmenter la limite de crédit du client</li>
+                                </ul>
+                            </div>`,
+                            confirmButtonColor: '#dc3545',
+                            confirmButtonText: 'Compris'
+                        });
+                        return false;
+                    }
+                }
+            }
             
             // Vérifier le client selon le type
             if (clientType === 'existant') {
                 const clientSelect = document.getElementById('client_id');
                 if (!clientSelect) {
                     console.error('ERREUR: Champ client_id non trouvé dans le DOM');
-                    // Ne pas bloquer, laisser le serveur gérer
-                    console.log('Champ non trouvé, soumission autorisée pour validation serveur');
-                    return true;
+                    e.preventDefault();
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erreur',
+                        text: 'Champ client non trouvé. Veuillez recharger la page.',
+                        confirmButtonColor: '#dc3545',
+                        confirmButtonText: 'OK'
+                    });
+                    return false;
                 }
                 
                 const clientId = clientSelect.value ? clientSelect.value.trim() : '';
@@ -768,17 +1009,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!clientId || clientId === '' || clientId === '0') {
                     console.error('Aucun client sélectionné');
                     e.preventDefault();
-                    alert('Veuillez sélectionner un client existant.');
-                    clientSelect.focus();
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Client requis',
+                        text: 'Veuillez sélectionner un client existant.',
+                        confirmButtonColor: '#667eea',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        clientSelect.focus();
+                        clientSelect.classList.add('is-invalid');
+                    });
                     return false;
                 }
+                
+                // Enlever la classe d'erreur si présente
+                clientSelect.classList.remove('is-invalid');
                 console.log('✓ Client validé:', clientId);
             } else {
                 // Vérifier les champs du nouveau client
                 const typeClientRadio = document.querySelector('input[name="type_client"]:checked');
                 if (!typeClientRadio) {
                     e.preventDefault();
-                    alert('Veuillez sélectionner le type de client (Personne ou Entreprise).');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Type de client requis',
+                        text: 'Veuillez sélectionner le type de client (Personne ou Entreprise).',
+                        confirmButtonColor: '#667eea',
+                        confirmButtonText: 'OK'
+                    });
                     return false;
                 }
                 
@@ -787,8 +1045,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (!adresse || !adresse.value.trim()) {
                     e.preventDefault();
-                    alert('L\'adresse est requise.');
-                    if (adresse) adresse.focus();
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Adresse requise',
+                        text: 'L\'adresse est requise.',
+                        confirmButtonColor: '#667eea',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        if (adresse) adresse.focus();
+                    });
                     return false;
                 }
                 
@@ -796,16 +1061,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     const nom = document.getElementById('nom');
                     if (!nom || !nom.value.trim()) {
                         e.preventDefault();
-                        alert('Le nom est requis pour une personne.');
-                        if (nom) nom.focus();
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Nom requis',
+                            text: 'Le nom est requis pour une personne.',
+                            confirmButtonColor: '#667eea',
+                            confirmButtonText: 'OK'
+                        }).then(() => {
+                            if (nom) nom.focus();
+                        });
                         return false;
                     }
                 } else {
                     const nomEntreprise = document.getElementById('nom_entreprise');
                     if (!nomEntreprise || !nomEntreprise.value.trim()) {
                         e.preventDefault();
-                        alert('Le nom de l\'entreprise est requis.');
-                        if (nomEntreprise) nomEntreprise.focus();
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Nom d\'entreprise requis',
+                            text: 'Le nom de l\'entreprise est requis.',
+                            confirmButtonColor: '#667eea',
+                            confirmButtonText: 'OK'
+                        }).then(() => {
+                            if (nomEntreprise) nomEntreprise.focus();
+                        });
                         return false;
                     }
                 }
@@ -817,7 +1096,13 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('ERREUR dans la validation:', error);
             console.error('Stack:', error.stack);
             // En cas d'erreur, permettre la soumission pour que le serveur gère la validation
-            alert('Une erreur est survenue lors de la validation. Le formulaire sera soumis pour validation côté serveur.');
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur de validation',
+                text: 'Une erreur est survenue lors de la validation. Le formulaire sera soumis pour validation côté serveur.',
+                confirmButtonColor: '#dc3545',
+                confirmButtonText: 'OK'
+            });
             return true;
         }
     });
@@ -828,6 +1113,12 @@ document.addEventListener('DOMContentLoaded', function() {
 // Initialiser au chargement
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== INITIALISATION COMPLÈTE ===');
+    
+    // Retirer l'attribut required de tous les champs dans client-nouveau-section au chargement
+    // car cette section est cachée par défaut
+    document.querySelectorAll('#client-nouveau-section input[required], #client-nouveau-section textarea[required]').forEach(el => {
+        el.removeAttribute('required');
+    });
     
     // S'assurer que le champ client_id a l'attribut required si client existant est sélectionné
     const clientExistantRadio = document.getElementById('client_existant');
@@ -859,7 +1150,49 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Client existant sélectionné:', clientExistantRadio ? clientExistantRadio.checked : 'N/A');
     console.log('Champ client_id required:', document.getElementById('client_id') ? document.getElementById('client_id').hasAttribute('required') : 'N/A');
     console.log('=== FIN INITIALISATION ===');
+    
+    // Initialiser Select2 pour la recherche de clients
+    initSelect2Client();
 });
+
+// Fonction pour initialiser Select2 sur le select client
+function initSelect2Client() {
+    const clientSelect = document.getElementById('client_id');
+    if (!clientSelect) return;
+    
+    // Attendre que jQuery soit chargé
+    if (typeof jQuery === 'undefined') {
+        console.log('jQuery n\'est pas encore chargé, réessayer dans 100ms...');
+        setTimeout(initSelect2Client, 100);
+        return;
+    }
+    
+    const $clientSelect = jQuery('#client_id');
+    if ($clientSelect.length) {
+        // Détruire Select2 s'il existe déjà
+        if ($clientSelect.hasClass('select2-hidden-accessible')) {
+            $clientSelect.select2('destroy');
+        }
+        
+        // Initialiser Select2 avec recherche
+        $clientSelect.select2({
+            placeholder: 'Rechercher un client...',
+            allowClear: false,
+            language: {
+                noResults: function() {
+                    return "Aucun client trouvé";
+                },
+                searching: function() {
+                    return "Recherche en cours...";
+                }
+            },
+            width: '100%',
+            theme: 'bootstrap-5'
+        });
+        
+        console.log('✓ Select2 initialisé pour le select client');
+    }
+}
 </script>
 
 <style>
@@ -881,6 +1214,42 @@ document.addEventListener('DOMContentLoaded', function() {
 .form-check-card .form-check-input:checked + .form-check-label {
     background: rgba(102, 126, 234, 0.1);
     border-color: #667eea !important;
+}
+
+/* Select2 Dark Mode Styles */
+body.dark-mode .select2-container--bootstrap-5 .select2-selection {
+    background-color: #2d2d2d !important;
+    border-color: #404040 !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .select2-container--bootstrap-5 .select2-selection__rendered {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .select2-container--bootstrap-5 .select2-dropdown {
+    background-color: #2d2d2d !important;
+    border-color: #404040 !important;
+}
+
+body.dark-mode .select2-container--bootstrap-5 .select2-results__option {
+    background-color: #2d2d2d !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .select2-container--bootstrap-5 .select2-results__option--highlighted {
+    background-color: #667eea !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .select2-container--bootstrap-5 .select2-search--dropdown .select2-search__field {
+    background-color: #1e1e1e !important;
+    border-color: #404040 !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .select2-container--bootstrap-5 .select2-selection__placeholder {
+    color: #999 !important;
 }
 </style>
 

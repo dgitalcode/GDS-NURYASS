@@ -100,7 +100,7 @@ require_once '../includes/header.php';
 <!-- Filtres et recherche -->
 <div class="card mb-4">
     <div class="card-body">
-        <form method="GET" class="row g-3">
+        <form method="GET" class="row g-3" id="searchForm">
             <div class="col-md-6">
                 <div class="input-group">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
@@ -121,9 +121,18 @@ require_once '../includes/header.php';
                 </select>
             </div>
             <div class="col-md-3">
-                <button type="submit" class="btn btn-outline-primary w-100">
-                    <i class="bi bi-funnel me-2"></i>Filtrer
-                </button>
+                <div class="btn-group w-100" role="group">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="bi bi-funnel me-2"></i>Filtrer
+                    </button>
+                    <button type="button" 
+                            class="btn btn-outline-secondary" 
+                            id="resetFiltersBtn"
+                            title="Réinitialiser les filtres"
+                            onclick="resetFilters()">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                </div>
             </div>
             <?php if (!empty($search)): ?>
             <div class="col-md-12 mt-2">
@@ -304,7 +313,7 @@ require_once '../includes/header.php';
                                         <a href="delete.php?id=<?php echo $client['id']; ?>" 
                                            class="btn btn-outline-danger" 
                                            title="Supprimer"
-                                           onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce client ?')">
+                                           onclick="return confirmDelete(event, 'Êtes-vous sûr de vouloir supprimer ce client ?', 'Supprimer le client')">
                                             <i class="bi bi-trash"></i>
                                         </a>
                                     </div>
@@ -367,6 +376,21 @@ document.getElementById('searchInput')?.addEventListener('keypress', function(e)
         document.querySelector('form').submit();
     }
 });
+</script>
+
+<script>
+// Fonction pour réinitialiser tous les champs du formulaire
+function resetFilters() {
+    const form = document.getElementById('searchForm');
+    if (form) {
+        // Vider tous les champs
+        form.querySelector('input[name="search"]').value = '';
+        form.querySelector('select[name="type"]').value = '';
+        
+        // Rediriger vers la page sans paramètres
+        window.location.href = 'index.php';
+    }
+}
 </script>
 
 <?php require_once '../includes/footer.php'; ?>

@@ -43,8 +43,73 @@ $currentUser = getCurrentUser();
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <style>
+        /* SweetAlert2 Dark Mode Support */
+        body.dark-mode .swal2-popup {
+            background-color: #2d2d2d !important;
+            color: #e0e0e0 !important;
+        }
+        
+        body.dark-mode .swal2-title {
+            color: #e0e0e0 !important;
+        }
+        
+        body.dark-mode .swal2-content {
+            color: #e0e0e0 !important;
+        }
+        
+        body.dark-mode .swal2-confirm {
+            background-color: #667eea !important;
+        }
+        
+        body.dark-mode .swal2-cancel {
+            background-color: #6c757d !important;
+        }
+        
+        body.dark-mode .swal2-html-container {
+            color: #e0e0e0 !important;
+        }
+        
+        body.dark-mode .swal2-icon.swal2-warning {
+            border-color: #ffc107 !important;
+            color: #ffc107 !important;
+        }
+        
+        body.dark-mode .swal2-icon.swal2-error {
+            border-color: #dc3545 !important;
+            color: #dc3545 !important;
+        }
+        
+        body.dark-mode .swal2-icon.swal2-success {
+            border-color: #28a745 !important;
+            color: #28a745 !important;
+        }
+        
+        body.dark-mode .swal2-icon.swal2-info {
+            border-color: #17a2b8 !important;
+            color: #17a2b8 !important;
+        }
+        
+        /* SweetAlert2 Toast Styles */
+        .swal2-toast {
+            background-color: #2d2d2d !important;
+        }
+        
+        body.dark-mode .swal2-toast {
+            background-color: #1a1a1a !important;
+        }
+        
+        body.dark-mode .swal2-toast .swal2-title {
+            color: #e0e0e0 !important;
+        }
+        
+        body.dark-mode .swal2-toast .swal2-content {
+            color: #e0e0e0 !important;
+        }
+        
         :root {
             --primary-color: #667eea;
             --secondary-color: #764ba2;
@@ -54,6 +119,314 @@ $currentUser = getCurrentUser();
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f7fa;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        /* Dark Mode Styles */
+        body.dark-mode {
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .top-bar {
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .card {
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+            border-color: #404040;
+        }
+        
+        body.dark-mode .card-header {
+            background-color: #2d2d2d !important;
+            border-bottom-color: #404040;
+        }
+        
+        /* Tableaux - Dark Mode */
+        body.dark-mode .table {
+            color: #e0e0e0;
+            border-color: #404040;
+        }
+        
+        body.dark-mode .table thead th {
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            border-color: #404040;
+        }
+        
+        body.dark-mode .table tbody td {
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+            border-color: #404040;
+        }
+        
+        body.dark-mode .table tbody tr {
+            border-color: #404040;
+            background-color: #2d2d2d;
+        }
+        
+        body.dark-mode .table tbody tr:hover {
+            background-color: #333333;
+        }
+        
+        body.dark-mode .table tbody tr:hover td {
+            background-color: #333333;
+            color: #e0e0e0;
+        }
+        
+        /* Table-light (en-têtes Bootstrap) */
+        body.dark-mode .table-light,
+        body.dark-mode .table-light thead th {
+            background-color: #1a1a1a !important;
+            color: #e0e0e0 !important;
+            border-color: #404040 !important;
+        }
+        
+        /* Table-hover */
+        body.dark-mode .table-hover tbody tr {
+            background-color: #2d2d2d;
+        }
+        
+        body.dark-mode .table-hover tbody tr:hover {
+            background-color: #333333;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .table-hover tbody tr:hover td {
+            background-color: #333333;
+            color: #e0e0e0;
+        }
+        
+        /* Table-bordered */
+        body.dark-mode .table-bordered {
+            border-color: #404040;
+        }
+        
+        body.dark-mode .table-bordered th,
+        body.dark-mode .table-bordered td {
+            border-color: #404040;
+        }
+        
+        /* Table responsive */
+        body.dark-mode .table-responsive {
+            border-color: #404040;
+        }
+        
+        body.dark-mode .form-control,
+        body.dark-mode .form-select {
+            background-color: #1a1a1a;
+            border-color: #404040;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .form-control:focus,
+        body.dark-mode .form-select:focus {
+            background-color: #1a1a1a;
+            border-color: #667eea;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .breadcrumb-item a {
+            color: #667eea;
+        }
+        
+        body.dark-mode .text-muted {
+            color: #a0a0a0 !important;
+        }
+        
+        body.dark-mode .stat-card {
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .alert {
+            background-color: #2d2d2d;
+            border-color: #404040;
+        }
+        
+        body.dark-mode .page-title {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .breadcrumb {
+            background-color: transparent;
+        }
+        
+        body.dark-mode .breadcrumb-item.active {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .btn-outline-primary,
+        body.dark-mode .btn-outline-secondary,
+        body.dark-mode .btn-outline-info,
+        body.dark-mode .btn-outline-danger,
+        body.dark-mode .btn-outline-success {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        
+        body.dark-mode .btn-outline-primary:hover,
+        body.dark-mode .btn-outline-secondary:hover,
+        body.dark-mode .btn-outline-info:hover {
+            background-color: #667eea;
+            border-color: #667eea;
+            color: #fff;
+        }
+        
+        body.dark-mode .badge {
+            background-color: #404040;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .badge.bg-primary {
+            background-color: #667eea !important;
+            color: #fff;
+        }
+        
+        body.dark-mode .badge.bg-success {
+            background-color: #48bb78 !important;
+            color: #fff;
+        }
+        
+        body.dark-mode .badge.bg-danger {
+            background-color: #f56565 !important;
+            color: #fff;
+        }
+        
+        body.dark-mode .badge.bg-warning {
+            background-color: #ed8936 !important;
+            color: #000;
+        }
+        
+        body.dark-mode .badge.bg-info {
+            background-color: #4299e1 !important;
+            color: #fff;
+        }
+        
+        body.dark-mode .badge.bg-secondary {
+            background-color: #718096 !important;
+            color: #fff;
+        }
+        
+        /* Liens dans les tableaux */
+        body.dark-mode .table a {
+            color: #667eea;
+        }
+        
+        body.dark-mode .table a:hover {
+            color: #764ba2;
+        }
+        
+        /* Textes dans les tableaux */
+        body.dark-mode .table strong {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .table small {
+            color: #b0b0b0;
+        }
+        
+        /* Couleurs de texte spécifiques */
+        body.dark-mode .text-primary {
+            color: #667eea !important;
+        }
+        
+        body.dark-mode .text-success {
+            color: #48bb78 !important;
+        }
+        
+        body.dark-mode .text-danger {
+            color: #f56565 !important;
+        }
+        
+        body.dark-mode .text-warning {
+            color: #ed8936 !important;
+        }
+        
+        body.dark-mode .text-info {
+            color: #4299e1 !important;
+        }
+        
+        body.dark-mode .text-secondary {
+            color: #a0a0a0 !important;
+        }
+        
+        /* Pagination */
+        body.dark-mode .pagination .page-link {
+            background-color: #2d2d2d;
+            border-color: #404040;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .pagination .page-link:hover {
+            background-color: #333333;
+            border-color: #667eea;
+            color: #667eea;
+        }
+        
+        body.dark-mode .pagination .page-item.active .page-link {
+            background-color: #667eea;
+            border-color: #667eea;
+            color: #fff;
+        }
+        
+        body.dark-mode .pagination .page-item.disabled .page-link {
+            background-color: #1a1a1a;
+            border-color: #404040;
+            color: #666;
+        }
+        
+        /* Progress bars */
+        body.dark-mode .progress {
+            background-color: #1a1a1a;
+        }
+        
+        body.dark-mode .progress-bar {
+            background-color: #667eea;
+        }
+        
+        /* Labels et headings */
+        body.dark-mode label,
+        body.dark-mode .form-label {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode h1,
+        body.dark-mode h2,
+        body.dark-mode h3,
+        body.dark-mode h4,
+        body.dark-mode h5,
+        body.dark-mode h6 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .card-body h5,
+        body.dark-mode .card-header h5 {
+            color: #e0e0e0;
+        }
+        
+        /* Input groups */
+        body.dark-mode .input-group-text {
+            background-color: #1a1a1a;
+            border-color: #404040;
+            color: #e0e0e0;
+        }
+        
+        /* List groups */
+        body.dark-mode .list-group-item {
+            background-color: #2d2d2d;
+            border-color: #404040;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .list-group-item:hover {
+            background-color: #333333;
+        }
+        
+        body.dark-mode .settings-dropdown {
+            background: rgba(30, 30, 30, 0.98);
         }
         
         /* Sidebar */
@@ -78,29 +451,22 @@ $currentUser = getCurrentUser();
         
         .sidebar-header .logo-container {
             display: flex;
-            flex-direction: row;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 0;
+            width: 100%;
         }
         
         .sidebar-header .logo-img {
-            max-width: 180px;
-            max-height: 120px;
+            max-width: 200px;
+            max-height: 150px;
             width: auto;
             height: auto;
             object-fit: contain;
-            margin: 0;
+            margin: 0 auto;
             padding: 0;
-        }
-        
-        .sidebar-header h4 {
-            margin: 0;
-            padding: 0;
-            margin-left: 5px;
-            font-weight: 600;
-            font-size: 28px;
-            color: white;
+            display: block;
         }
         
         .sidebar-header p {
@@ -317,11 +683,65 @@ $currentUser = getCurrentUser();
             letter-spacing: 0.5px;
         }
         
+        /* Mobile Menu Toggle Button */
+        .mobile-menu-toggle {
+            display: none;
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 1001;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+        }
+        
+        .mobile-menu-toggle:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+        }
+        
+        .mobile-menu-toggle.active {
+            background: #f56565;
+        }
+        
+        /* Overlay pour mobile */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .sidebar-overlay.show {
+            display: block;
+            opacity: 1;
+        }
+        
         /* Responsive */
         @media (max-width: 768px) {
+            .mobile-menu-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
             .sidebar {
                 transform: translateX(-100%);
-                transition: transform 0.3s;
+                transition: transform 0.3s ease-in-out;
+                z-index: 1000;
             }
             
             .sidebar.show {
@@ -330,13 +750,74 @@ $currentUser = getCurrentUser();
             
             .main-content {
                 margin-left: 0;
+                padding: 70px 15px 20px 15px;
+            }
+            
+            .top-bar {
+                padding: 10px 15px;
+                margin-bottom: 15px;
+            }
+            
+            .page-title {
+                font-size: 20px;
+            }
+            
+            .sidebar-header {
+                padding: 20px 15px;
+            }
+            
+            .sidebar-header .logo-img {
+                max-width: 150px;
+                max-height: 100px;
+            }
+            
+            .sidebar-menu .nav-link {
+                padding: 12px 15px;
+                font-size: 14px;
+            }
+            
+            .stat-card {
+                padding: 20px;
+            }
+            
+            .stat-card .stat-value {
+                font-size: 24px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .main-content {
+                padding: 60px 10px 15px 10px;
+            }
+            
+            .top-bar {
+                padding: 8px 10px;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .page-title {
+                font-size: 18px;
+            }
+            
+            .sidebar-header .logo-img {
+                max-width: 120px;
+                max-height: 80px;
             }
         }
     </style>
 </head>
 <body>
+    <!-- Mobile Menu Toggle Button -->
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle menu">
+        <i class="bi bi-list" id="menu-icon"></i>
+    </button>
+    
+    <!-- Overlay pour fermer le menu mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    
     <!-- Sidebar -->
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo-container">
                 <?php 
@@ -351,7 +832,6 @@ $currentUser = getCurrentUser();
                         <i class="bi bi-building" style="font-size: 60px;"></i>
                     </div>
                 <?php endif; ?>
-                <h4>NURYASS</h4>
             </div>
         </div>
         
@@ -440,6 +920,10 @@ $currentUser = getCurrentUser();
                             <?php echo $currentUser['role'] === 'admin' ? 'Administrateur' : 'Caissier'; ?>
                         </div>
                     </div>
+                    <a href="#" class="dropdown-item" id="dark-mode-toggle">
+                        <i class="bi bi-moon-stars" id="dark-mode-icon"></i>
+                        <span id="dark-mode-text">Mode Sombre</span>
+                    </a>
                     <a href="<?php echo url('auth/logout.php'); ?>" class="dropdown-item">
                         <i class="bi bi-box-arrow-right"></i>
                         <span>Déconnexion</span>

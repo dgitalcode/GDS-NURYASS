@@ -84,7 +84,7 @@ require_once '../includes/header.php';
                                             <i class="bi bi-pencil"></i>
                                         </a>
                                         <?php if ($user['id'] != $currentUser['id']): ?>
-                                            <a href="delete.php?id=<?php echo $user['id']; ?>" class="btn btn-outline-danger" title="Supprimer définitivement" onclick="return confirm('⚠️ ATTENTION: Cette action est irréversible !\n\nÊtes-vous sûr de vouloir supprimer définitivement cet utilisateur ?')">
+                                            <a href="delete.php?id=<?php echo $user['id']; ?>" class="btn btn-outline-danger" title="Supprimer définitivement" onclick="return confirmDelete(event, '⚠️ ATTENTION: Cette action est irréversible !\n\nÊtes-vous sûr de vouloir supprimer définitivement cet utilisateur ?', 'Supprimer l\'utilisateur')">
                                                 <i class="bi bi-trash"></i>
                                             </a>
                                         <?php else: ?>

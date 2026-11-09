@@ -69,7 +69,7 @@ require_once '../includes/header.php';
                                         <a href="edit.php?id=<?php echo $type['id']; ?>" class="btn btn-outline-primary" title="Modifier">
                                             <i class="bi bi-pencil"></i>
                                         </a>
-                                        <a href="delete.php?id=<?php echo $type['id']; ?>" class="btn btn-outline-danger" title="Supprimer" onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce type ?')">
+                                        <a href="delete.php?id=<?php echo $type['id']; ?>" class="btn btn-outline-danger" title="Supprimer" onclick="return confirmDelete(event, 'Êtes-vous sûr de vouloir supprimer ce type ?', 'Supprimer le type')">
                                             <i class="bi bi-trash"></i>
                                         </a>
                                     </div>

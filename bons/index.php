@@ -12,7 +12,7 @@ requireLogin('../login.php');
 $pageTitle = 'Gestion des Bons';
 
 // Paramètres de recherche et filtrage
-$search = $_GET['search'] ?? '';
+$search = trim($_GET['search'] ?? '');
 $typeFilter = $_GET['type'] ?? '';
 $statutFilter = $_GET['statut'] ?? '';
 $clientFilter = intval($_GET['client_id'] ?? 0);
@@ -27,9 +27,17 @@ try {
     $where = ["1=1"];
     $params = [];
     
+    // Recherche insensible à la casse (majuscules/minuscules)
     if (!empty($search)) {
-        $where[] = "(b.numero_bon LIKE :search OR c.nom LIKE :search OR c.nom_entreprise LIKE :search)";
-        $params['search'] = "%$search%";
+        $searchTerm = trim($search);
+        $where[] = "(LOWER(b.numero_bon) LIKE LOWER(:search_numero) OR 
+                     LOWER(c.nom) LIKE LOWER(:search_nom) OR 
+                     LOWER(c.prenom) LIKE LOWER(:search_prenom) OR 
+                     LOWER(c.nom_entreprise) LIKE LOWER(:search_entreprise))";
+        $params['search_numero'] = "%$searchTerm%";
+        $params['search_nom'] = "%$searchTerm%";
+        $params['search_prenom'] = "%$searchTerm%";
+        $params['search_entreprise'] = "%$searchTerm%";
     }
     
     if (!empty($typeFilter)) {
@@ -180,11 +188,17 @@ require_once '../includes/header.php';
 <!-- Filtres -->
 <div class="card mb-4">
     <div class="card-body">
-        <form method="GET" class="row g-3">
+        <form method="GET" class="row g-3" id="searchForm">
             <div class="col-md-3">
                 <div class="input-group">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" class="form-control" name="search" placeholder="Rechercher..." value="<?php echo htmlspecialchars($search); ?>">
+                    <input type="text" 
+                           class="form-control" 
+                           name="search" 
+                           id="searchInput"
+                           placeholder="Rechercher par numéro, client..." 
+                           value="<?php echo htmlspecialchars($search); ?>"
+                           autocomplete="off">
                 </div>
             </div>
             <div class="col-md-2">
@@ -212,10 +226,31 @@ require_once '../includes/header.php';
                 </select>
             </div>
             <div class="col-md-2">
-                <button type="submit" class="btn btn-outline-primary w-100">
-                    <i class="bi bi-funnel me-2"></i>Filtrer
-                </button>
+                <div class="btn-group w-100" role="group">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="bi bi-funnel me-2"></i>Filtrer
+                    </button>
+                    <button type="button" 
+                            class="btn btn-outline-secondary" 
+                            id="resetFiltersBtn"
+                            title="Réinitialiser les filtres"
+                            onclick="resetFilters()">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                </div>
             </div>
+            <?php if (!empty($search) || !empty($typeFilter) || !empty($statutFilter) || $clientFilter > 0): ?>
+            <div class="col-md-12 mt-2">
+                <a href="index.php" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x-circle me-1"></i>Effacer les filtres
+                </a>
+                <?php if (!empty($search)): ?>
+                    <small class="text-muted ms-2">
+                        <?php echo $totalBons; ?> résultat(s) trouvé(s) pour "<?php echo htmlspecialchars($search); ?>"
+                    </small>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
         </form>
     </div>
 </div>
@@ -283,7 +318,7 @@ require_once '../includes/header.php';
                                         <a href="edit.php?id=<?php echo $bon['id']; ?>" class="btn btn-outline-primary" title="Modifier">
                                             <i class="bi bi-pencil"></i>
                                         </a>
-                                        <a href="delete.php?id=<?php echo $bon['id']; ?>" class="btn btn-outline-danger" title="Supprimer" onclick="return confirm('Êtes-vous sûr ?')">
+                                        <a href="delete.php?id=<?php echo $bon['id']; ?>" class="btn btn-outline-danger" title="Supprimer" onclick="return confirmDelete(event, 'Êtes-vous sûr de vouloir supprimer ce bon ?', 'Supprimer le bon')">
                                             <i class="bi bi-trash"></i>
                                         </a>
                                     </div>
@@ -317,6 +352,67 @@ require_once '../includes/header.php';
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+// Fonction pour réinitialiser tous les champs du formulaire
+function resetFilters() {
+    const form = document.getElementById('searchForm');
+    if (form) {
+        // Vider tous les champs
+        form.querySelector('input[name="search"]').value = '';
+        form.querySelector('select[name="type"]').value = '';
+        form.querySelector('select[name="statut"]').value = '';
+        form.querySelector('select[name="client_id"]').value = '';
+        
+        // Rediriger vers la page sans paramètres
+        window.location.href = 'index.php';
+    }
+}
+
+// Recherche automatique après 1 seconde d'inactivité
+let searchTimeout;
+const searchInput = document.getElementById('searchInput');
+const searchForm = document.getElementById('searchForm');
+
+if (searchInput && searchForm) {
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const searchValue = this.value.trim();
+        
+        // Si le champ est vide ou contient au moins 1 caractère, lancer la recherche après 1 seconde
+        if (searchValue.length === 0 || searchValue.length >= 1) {
+            searchTimeout = setTimeout(function() {
+                // Si le champ a changé, soumettre le formulaire
+                if (searchInput.value.trim() === searchValue) {
+                    // Réinitialiser à la page 1 lors d'une nouvelle recherche
+                    const form = searchForm;
+                    const pageInput = document.createElement('input');
+                    pageInput.type = 'hidden';
+                    pageInput.name = 'page';
+                    pageInput.value = '1';
+                    form.appendChild(pageInput);
+                    searchForm.submit();
+                }
+            }, 1000);
+        }
+    });
+    
+    // Permettre la recherche avec Entrée
+    searchInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            clearTimeout(searchTimeout);
+            // Réinitialiser à la page 1
+            const pageInput = document.createElement('input');
+            pageInput.type = 'hidden';
+            pageInput.name = 'page';
+            pageInput.value = '1';
+            searchForm.appendChild(pageInput);
+            searchForm.submit();
+        }
+    });
+}
+</script>
 
 <?php require_once '../includes/footer.php'; ?>
 
